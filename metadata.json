@@ -1,0 +1,5 @@
+{
+  "name": "Batch Image Processor",
+  "description": "A client-side web app to batch process images from a ZIP file, apply random watermarks, compress to WebP, and export as a ZIP.",
+  "requestFramePermissions": []
+}
