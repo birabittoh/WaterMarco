@@ -13,24 +13,47 @@ const generateRandomWatermark = (): WatermarkInstance => ({
   negative: false,
 });
 
-const PreviewModal = ({ item, processFn, onClose }: { item: ImageItem, processFn: (item: ImageItem) => Promise<{ name: string, blob: Blob }>, onClose: () => void }) => {
+const PreviewModal = ({ item, processFn, onClose, onSetWatermarkPosition }: { item: ImageItem, processFn: (item: ImageItem) => Promise<{ name: string, blob: Blob }>, onClose: () => void, onSetWatermarkPosition?: (x: number, y: number) => void }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const currentUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    let url: string | null = null;
+    let isMounted = true;
+    setIsLoading(true);
     processFn(item).then(({ blob }) => {
-      url = URL.createObjectURL(blob);
+      if (!isMounted) return;
+      const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
+      if (currentUrlRef.current) {
+        URL.revokeObjectURL(currentUrlRef.current);
+      }
+      currentUrlRef.current = url;
       setIsLoading(false);
     }).catch(e => {
       console.error(e);
-      setIsLoading(false);
+      if (isMounted) setIsLoading(false);
     });
     return () => {
-      if (url) URL.revokeObjectURL(url);
+      isMounted = false;
     };
   }, [item, processFn]);
+
+  useEffect(() => {
+    return () => {
+      if (currentUrlRef.current) {
+        URL.revokeObjectURL(currentUrlRef.current);
+      }
+    };
+  }, []);
+
+  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!onSetWatermarkPosition) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    onSetWatermarkPosition(x, y);
+  };
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
@@ -41,12 +64,20 @@ const PreviewModal = ({ item, processFn, onClose }: { item: ImageItem, processFn
             <X size={20} />
           </button>
         </div>
-        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100 dark:bg-black/50 min-h-[300px]">
-          {isLoading ? (
-            <Loader2 size={48} className="animate-spin text-indigo-500" />
-          ) : previewUrl ? (
-            <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain shadow-lg" />
-          ) : (
+        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100 dark:bg-black/50 min-h-[300px] relative">
+          {isLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm">
+              <Loader2 size={48} className="animate-spin text-indigo-500" />
+            </div>
+          )}
+          {previewUrl ? (
+            <img 
+              src={previewUrl} 
+              alt="Preview" 
+              className="max-w-full max-h-full shadow-lg cursor-crosshair"
+              onClick={handleImageClick}
+            />
+          ) : !isLoading && (
             <p className="text-red-500">Failed to load preview</p>
           )}
         </div>
@@ -70,7 +101,7 @@ export default function App() {
   const [isDraggingWm, setIsDraggingWm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [previewImage, setPreviewImage] = useState<ImageItem | null>(null);
+  const [previewImageId, setPreviewImageId] = useState<string | null>(null);
 
   const watermarkInputRef = useRef<HTMLInputElement>(null);
 
@@ -451,9 +482,9 @@ export default function App() {
       watermarkPosition: { 
         x, 
         y, 
-        scale: i.watermarkPosition?.scale || 0.2,
-        opacity: i.watermarkPosition?.opacity ?? 0.5,
-        negative: i.watermarkPosition?.negative ?? false
+        scale: i.watermarkPosition?.scale || massWmScale,
+        opacity: i.watermarkPosition?.opacity ?? massWmOpacity,
+        negative: i.watermarkPosition?.negative ?? massWmNegative
       } 
     } : i));
   };
@@ -752,18 +783,19 @@ export default function App() {
                 onToggleCompress={() => toggleCompress(item.id)}
                 onDelete={() => deleteImage(item.id)}
                 onDownload={() => downloadSingleImage(item)}
-                onPreview={() => setPreviewImage(item)}
+                onPreview={() => setPreviewImageId(item.id)}
               />
             ))}
           </div>
         )}
       </main>
 
-      {previewImage && (
+      {previewImageId && images.find(i => i.id === previewImageId) && (
         <PreviewModal 
-          item={previewImage} 
+          item={images.find(i => i.id === previewImageId)!} 
           processFn={processSingleImage} 
-          onClose={() => setPreviewImage(null)} 
+          onClose={() => setPreviewImageId(null)} 
+          onSetWatermarkPosition={(x, y) => setWatermarkPosition(previewImageId, x, y)}
         />
       )}
     </div>
