@@ -131,7 +131,7 @@ export const ImageCard: React.FC<Props> = ({
                 />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <label className="text-gray-600 dark:text-gray-400 font-medium">Quality</label>
+                <label className="text-gray-600 dark:text-gray-400 font-medium">Compression</label>
                 <input 
                   type="range" 
                   min="0.1" max="1" step="0.1" 

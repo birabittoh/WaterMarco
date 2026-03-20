@@ -22,6 +22,7 @@ export interface AppState {
   watermark: string | null;
   maxSize: number;
   quality: number;
+  exportFormat: 'webp' | 'jpeg' | 'png';
   watermarkScale: number;
   watermarkOpacity: number;
   watermarkNegative: boolean;

@@ -60,6 +60,7 @@ export default function App() {
   const [watermark, setWatermark] = useState<string | null>(null);
   const [maxSize, setMaxSize] = useState<number>(1920);
   const [quality, setQuality] = useState<number>(0.8);
+  const [exportFormat, setExportFormat] = useState<'webp' | 'jpeg' | 'png'>('webp');
   const [massWmScale, setMassWmScale] = useState<number>(0.2);
   const [massWmOpacity, setMassWmOpacity] = useState<number>(0.5);
   const [massWmNegative, setMassWmNegative] = useState<boolean>(false);
@@ -91,6 +92,7 @@ export default function App() {
           setWatermark(savedState.watermark || null);
           setMaxSize(savedState.maxSize || 1920);
           setQuality(savedState.quality || 0.8);
+          setExportFormat(savedState.exportFormat || 'webp');
         }
       } catch (e) {
         console.error('Failed to load state', e);
@@ -106,13 +108,13 @@ export default function App() {
     if (!isLoaded) return;
     const saveState = async () => {
       try {
-        await set('appState', { images, watermark, maxSize, quality });
+        await set('appState', { images, watermark, maxSize, quality, exportFormat });
       } catch (e) {
         console.error('Failed to save state', e);
       }
     };
     saveState();
-  }, [images, watermark, maxSize, quality, isLoaded]);
+  }, [images, watermark, maxSize, quality, exportFormat, isLoaded]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -267,12 +269,14 @@ export default function App() {
 
         const applyWatermarksAndExport = () => {
           if (item.compress) {
+            const mimeType = `image/${exportFormat}`;
+            const ext = exportFormat === 'jpeg' ? 'jpg' : exportFormat;
             canvas.toBlob((blob) => {
               if (blob) {
-                const newName = item.name.replace(/\.[^/.]+$/, "") + ".webp";
+                const newName = item.name.replace(/\.[^/.]+$/, "") + `.${ext}`;
                 resolve({ name: newName, blob });
               } else reject('Blob creation failed');
-            }, 'image/webp', item.quality ?? quality);
+            }, mimeType, item.quality ?? quality);
           } else {
             const ext = item.name.split('.').pop()?.toLowerCase();
             const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -314,7 +318,7 @@ export default function App() {
       img.onerror = reject;
       img.src = item.dataUrl;
     });
-  }, [maxSize, quality, watermark]);
+  }, [maxSize, quality, watermark, exportFormat]);
 
   const handleDownload = async () => {
     if (images.length === 0) return;
@@ -536,6 +540,19 @@ export default function App() {
                 <span className="font-medium">Compression:</span>
               </div>
               <div className="flex items-center gap-2">
+                <label htmlFor="exportFormat">Format:</label>
+                <select
+                  id="exportFormat"
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value as 'webp' | 'jpeg' | 'png')}
+                  className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="webp">WebP</option>
+                  <option value="jpeg">JPEG</option>
+                  <option value="png">PNG</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
                 <label htmlFor="maxSize">Max Size (px):</label>
                 <input 
                   id="maxSize"
@@ -546,7 +563,7 @@ export default function App() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <label htmlFor="quality">WebP Quality:</label>
+                <label htmlFor="quality">Compression:</label>
                 <input 
                   id="quality"
                   type="range" 
@@ -616,7 +633,7 @@ export default function App() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <label htmlFor="massQuality" className="text-gray-600 dark:text-gray-400">WebP Quality:</label>
+                      <label htmlFor="massQuality" className="text-gray-600 dark:text-gray-400">Compression:</label>
                       <input 
                         id="massQuality"
                         type="range" 
