@@ -4,17 +4,35 @@ import { CheckSquare, Square, Download, Minimize, Trash2, Settings2 } from 'luci
 
 interface Props {
   item: ImageItem;
+  globalMaxSize: number;
+  globalQuality: number;
   onToggleSelect: () => void;
   onAddWatermark: () => void;
   onSetWatermarkPosition: (x: number, y: number) => void;
   onUpdateWatermarkSettings: (settings: Partial<WatermarkInstance>) => void;
+  onUpdateSettings: (settings: Partial<ImageItem>) => void;
   onToggleCompress: () => void;
   onDelete: () => void;
   onDownload: () => void;
+  onPreview: () => void;
   watermarkUrl: string | null;
 }
 
-export const ImageCard: React.FC<Props> = ({ item, onToggleSelect, onAddWatermark, onSetWatermarkPosition, onUpdateWatermarkSettings, onToggleCompress, onDelete, onDownload, watermarkUrl }) => {
+export const ImageCard: React.FC<Props> = ({ 
+  item, 
+  globalMaxSize,
+  globalQuality,
+  onToggleSelect, 
+  onAddWatermark, 
+  onSetWatermarkPosition, 
+  onUpdateWatermarkSettings, 
+  onUpdateSettings,
+  onToggleCompress, 
+  onDelete, 
+  onDownload, 
+  onPreview,
+  watermarkUrl 
+}) => {
   const [showSettings, setShowSettings] = useState(false);
 
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
@@ -45,8 +63,8 @@ export const ImageCard: React.FC<Props> = ({ item, onToggleSelect, onAddWatermar
             style={{
               left: `${item.watermarkPosition.x * 100}%`,
               top: `${item.watermarkPosition.y * 100}%`,
-              width: `${item.watermarkPosition.scale * 100}%`,
-              opacity: item.watermarkPosition.opacity,
+              width: `${(item.watermarkPosition.scale ?? 0.2) * 100}%`,
+              opacity: item.watermarkPosition.opacity ?? 0.5,
               filter: item.watermarkPosition.negative ? 'invert(100%)' : 'none',
               transform: 'translate(-50%, -50%)'
             }}
@@ -88,56 +106,91 @@ export const ImageCard: React.FC<Props> = ({ item, onToggleSelect, onAddWatermar
           <Trash2 size={16} />
         </button>
 
-        {/* Settings toggle button if watermark exists */}
-        {item.watermarkPosition && (
-          <button 
-            onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); }} 
-            className={`absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full shadow-md backdrop-blur-sm z-10 ${showSettings ? 'bg-indigo-500 text-white' : 'bg-white/80 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700'}`} 
-            title="Watermark Settings"
-          >
-            <Settings2 size={16} />
-          </button>
-        )}
+        {/* Settings toggle button */}
+        <button 
+          onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); }} 
+          className={`absolute bottom-2 left-1/2 -translate-x-1/2 p-2 rounded-full shadow-md backdrop-blur-sm z-10 opacity-0 group-hover:opacity-100 transition-opacity ${showSettings ? 'bg-indigo-500 text-white opacity-100' : 'bg-white/80 dark:bg-gray-800/80 text-gray-700 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-700'}`} 
+          title="Image Settings"
+        >
+          <Settings2 size={16} />
+        </button>
       </div>
 
-      {/* Watermark Settings Panel */}
-      {showSettings && item.watermarkPosition && (
+      {/* Settings Panel */}
+      {showSettings && (
         <div className="p-3 bg-gray-50 dark:bg-gray-800/80 border-t border-gray-200 dark:border-gray-700 text-xs flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-gray-600 dark:text-gray-400 font-medium">Size</label>
-            <input 
-              type="range" 
-              min="0.05" max="1" step="0.05" 
-              value={item.watermarkPosition.scale} 
-              onChange={(e) => onUpdateWatermarkSettings({ scale: Number(e.target.value) })}
-              className="flex-1"
-            />
-            <span className="w-8 text-right text-gray-500">{Math.round(item.watermarkPosition.scale * 100)}%</span>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-gray-600 dark:text-gray-400 font-medium">Opacity</label>
-            <input 
-              type="range" 
-              min="0.1" max="1" step="0.1" 
-              value={item.watermarkPosition.opacity} 
-              onChange={(e) => onUpdateWatermarkSettings({ opacity: Number(e.target.value) })}
-              className="flex-1"
-            />
-            <span className="w-8 text-right text-gray-500">{Math.round(item.watermarkPosition.opacity * 100)}%</span>
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer text-gray-600 dark:text-gray-400 font-medium">
-            <input 
-              type="checkbox" 
-              checked={item.watermarkPosition.negative}
-              onChange={(e) => onUpdateWatermarkSettings({ negative: e.target.checked })}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            Negative (Invert)
-          </label>
+          {item.compress && (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-gray-600 dark:text-gray-400 font-medium">Max Size</label>
+                <input 
+                  type="number" 
+                  value={item.maxSize ?? globalMaxSize} 
+                  onChange={(e) => onUpdateSettings({ maxSize: Number(e.target.value) })}
+                  className="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-gray-600 dark:text-gray-400 font-medium">Quality</label>
+                <input 
+                  type="range" 
+                  min="0.1" max="1" step="0.1" 
+                  value={item.quality ?? globalQuality} 
+                  onChange={(e) => onUpdateSettings({ quality: Number(e.target.value) })}
+                  className="flex-1"
+                />
+                <span className="w-8 text-right text-gray-500">{Math.round((item.quality ?? globalQuality) * 100)}%</span>
+              </div>
+              {item.watermarkPosition && <div className="h-px bg-gray-200 dark:bg-gray-700 my-1" />}
+            </>
+          )}
+          
+          {item.watermarkPosition && (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-gray-600 dark:text-gray-400 font-medium">WM Size</label>
+                <input 
+                  type="range" 
+                  min="0.05" max="1" step="0.05" 
+                  value={item.watermarkPosition.scale ?? 0.2} 
+                  onChange={(e) => onUpdateWatermarkSettings({ scale: Number(e.target.value) })}
+                  className="flex-1"
+                />
+                <span className="w-8 text-right text-gray-500">{Math.round((item.watermarkPosition.scale ?? 0.2) * 100)}%</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-gray-600 dark:text-gray-400 font-medium">WM Opacity</label>
+                <input 
+                  type="range" 
+                  min="0.1" max="1" step="0.1" 
+                  value={item.watermarkPosition.opacity ?? 0.5} 
+                  onChange={(e) => onUpdateWatermarkSettings({ opacity: Number(e.target.value) })}
+                  className="flex-1"
+                />
+                <span className="w-8 text-right text-gray-500">{Math.round((item.watermarkPosition.opacity ?? 0.5) * 100)}%</span>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer text-gray-600 dark:text-gray-400 font-medium">
+                <input 
+                  type="checkbox" 
+                  checked={item.watermarkPosition.negative ?? false}
+                  onChange={(e) => onUpdateWatermarkSettings({ negative: e.target.checked })}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Negative (Invert)
+              </label>
+            </>
+          )}
+          {!item.compress && !item.watermarkPosition && (
+            <div className="text-gray-500 italic text-center py-1">No active settings</div>
+          )}
         </div>
       )}
 
-      <div className="p-3 text-xs text-gray-600 dark:text-gray-400 truncate bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
+      <div 
+        className="p-3 text-xs text-gray-600 dark:text-gray-400 truncate bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
+        title={item.name}
+        onClick={(e) => { e.stopPropagation(); onPreview(); }}
+      >
         {item.name}
       </div>
     </div>

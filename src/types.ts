@@ -13,6 +13,8 @@ export interface ImageItem {
   selected: boolean;
   watermarkPosition: WatermarkInstance | null;
   compress: boolean;
+  maxSize?: number;
+  quality?: number;
 }
 
 export interface AppState {

@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { get, set } from 'idb-keyval';
 import { ImageItem, AppState, WatermarkInstance } from './types';
 import { ImageCard } from './components/ImageCard';
-import { Upload, Download, Trash2, CheckSquare, Square, Image as ImageIcon, Settings, Droplets, Minimize, Loader2 } from 'lucide-react';
+import { Upload, Download, Trash2, CheckSquare, Square, Image as ImageIcon, Settings, Droplets, Minimize, Loader2, X } from 'lucide-react';
 
 const generateRandomWatermark = (): WatermarkInstance => ({
   x: Math.random() * 0.8 + 0.1,
@@ -13,15 +13,63 @@ const generateRandomWatermark = (): WatermarkInstance => ({
   negative: false,
 });
 
+const PreviewModal = ({ item, processFn, onClose }: { item: ImageItem, processFn: (item: ImageItem) => Promise<{ name: string, blob: Blob }>, onClose: () => void }) => {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let url: string | null = null;
+    processFn(item).then(({ blob }) => {
+      url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+      setIsLoading(false);
+    }).catch(e => {
+      console.error(e);
+      setIsLoading(false);
+    });
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [item, processFn]);
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">{item.name} (Preview)</h3>
+          <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100 dark:bg-black/50 min-h-[300px]">
+          {isLoading ? (
+            <Loader2 size={48} className="animate-spin text-indigo-500" />
+          ) : previewUrl ? (
+            <img src={previewUrl} alt="Preview" className="max-w-full max-h-full object-contain shadow-lg" />
+          ) : (
+            <p className="text-red-500">Failed to load preview</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [watermark, setWatermark] = useState<string | null>(null);
   const [maxSize, setMaxSize] = useState<number>(1920);
   const [quality, setQuality] = useState<number>(0.8);
+  const [massWmScale, setMassWmScale] = useState<number>(0.2);
+  const [massWmOpacity, setMassWmOpacity] = useState<number>(0.5);
+  const [massWmNegative, setMassWmNegative] = useState<boolean>(false);
+  const [massMaxSize, setMassMaxSize] = useState<number>(1920);
+  const [massQuality, setMassQuality] = useState<number>(0.8);
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingWm, setIsDraggingWm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [previewImage, setPreviewImage] = useState<ImageItem | null>(null);
 
   const watermarkInputRef = useRef<HTMLInputElement>(null);
 
@@ -192,7 +240,7 @@ export default function App() {
     }
   };
 
-  const processSingleImage = async (item: ImageItem): Promise<{ name: string, blob: Blob }> => {
+  const processSingleImage = useCallback(async (item: ImageItem): Promise<{ name: string, blob: Blob }> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
@@ -200,9 +248,10 @@ export default function App() {
         let height = img.height;
 
         if (item.compress) {
+          const itemMaxSize = item.maxSize ?? maxSize;
           const maxDim = Math.max(width, height);
-          if (maxDim > maxSize) {
-            const ratio = maxSize / maxDim;
+          if (maxDim > itemMaxSize) {
+            const ratio = itemMaxSize / maxDim;
             width *= ratio;
             height *= ratio;
           }
@@ -223,7 +272,7 @@ export default function App() {
                 const newName = item.name.replace(/\.[^/.]+$/, "") + ".webp";
                 resolve({ name: newName, blob });
               } else reject('Blob creation failed');
-            }, 'image/webp', quality);
+            }, 'image/webp', item.quality ?? quality);
           } else {
             const ext = item.name.split('.').pop()?.toLowerCase();
             const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
@@ -238,7 +287,7 @@ export default function App() {
           const wmImg = new Image();
           wmImg.onload = () => {
             const wm = item.watermarkPosition!;
-            const wmSize = Math.max(width, height) * wm.scale;
+            const wmSize = Math.max(width, height) * (wm.scale ?? 0.2);
             const wmRatio = wmImg.height / wmImg.width;
             const wmWidth = wmSize;
             const wmHeight = wmSize * wmRatio;
@@ -247,7 +296,7 @@ export default function App() {
             const y = wm.y * height - wmHeight / 2;
             
             ctx.save();
-            ctx.globalAlpha = wm.opacity;
+            ctx.globalAlpha = wm.opacity ?? 0.5;
             if (wm.negative) {
               ctx.filter = 'invert(100%)';
             }
@@ -265,7 +314,7 @@ export default function App() {
       img.onerror = reject;
       img.src = item.dataUrl;
     });
-  };
+  }, [maxSize, quality, watermark]);
 
   const handleDownload = async () => {
     if (images.length === 0) return;
@@ -339,7 +388,27 @@ export default function App() {
       alert('Please upload a watermark first');
       return;
     }
-    setImages(images.map(i => i.selected ? { ...i, watermarkPosition: generateRandomWatermark() } : i));
+    setImages(images.map(i => i.selected ? { 
+      ...i, 
+      watermarkPosition: i.watermarkPosition || {
+        x: Math.random() * 0.8 + 0.1,
+        y: Math.random() * 0.8 + 0.1,
+        scale: massWmScale,
+        opacity: massWmOpacity,
+        negative: massWmNegative,
+      }
+    } : i));
+  };
+
+  const updateSelectedWatermarks = (settings: Partial<WatermarkInstance>) => {
+    setImages(images.map(i => i.selected && i.watermarkPosition ? {
+      ...i,
+      watermarkPosition: { ...i.watermarkPosition, ...settings }
+    } : i));
+  };
+
+  const updateSelectedSettings = (settings: Partial<ImageItem>) => {
+    setImages(images.map(i => i.selected ? { ...i, ...settings } : i));
   };
 
   const clearWatermarksSelected = () => {
@@ -356,7 +425,16 @@ export default function App() {
       alert('Please upload a watermark first');
       return;
     }
-    setImages(images.map(i => i.id === id ? { ...i, watermarkPosition: generateRandomWatermark() } : i));
+    setImages(images.map(i => i.id === id ? { 
+      ...i, 
+      watermarkPosition: {
+        x: Math.random() * 0.8 + 0.1,
+        y: Math.random() * 0.8 + 0.1,
+        scale: massWmScale,
+        opacity: massWmOpacity,
+        negative: massWmNegative,
+      } 
+    } : i));
   };
 
   const setWatermarkPosition = (id: string, x: number, y: number) => {
@@ -381,6 +459,10 @@ export default function App() {
       ...i,
       watermarkPosition: { ...i.watermarkPosition, ...settings }
     } : i));
+  };
+
+  const updateImageSettings = (id: string, settings: Partial<ImageItem>) => {
+    setImages(images.map(i => i.id === id ? { ...i, ...settings } : i));
   };
 
   const toggleCompress = (id: string) => {
@@ -480,33 +562,129 @@ export default function App() {
 
           {/* Mass Operations Bar */}
           {images.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-4 py-2">
-              <div className="flex items-center gap-3">
-                <button onClick={toggleSelectAll} className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                  {images.every(i => i.selected) ? <CheckSquare size={18} /> : <Square size={18} />}
-                  Select All
-                </button>
-                <span className="text-gray-300 dark:text-gray-600">|</span>
-                <span className="text-sm text-gray-500 dark:text-gray-400">{selectedCount} selected</span>
+            <div className="mt-4 flex flex-col gap-4 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <button onClick={toggleSelectAll} className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                    {images.every(i => i.selected) ? <CheckSquare size={18} /> : <Square size={18} />}
+                    Select All
+                  </button>
+                  <span className="text-gray-300 dark:text-gray-600">|</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">{selectedCount} selected</span>
+                </div>
+                
+                {selectedCount > 0 && (
+                  <div className="flex items-center gap-2">
+                    <button onClick={watermarkSelected} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
+                      Add Watermark
+                    </button>
+                    <button onClick={clearWatermarksSelected} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
+                      Clear Watermarks
+                    </button>
+                    <button onClick={() => compressSelected(true)} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
+                      Compress On
+                    </button>
+                    <button onClick={() => compressSelected(false)} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
+                      Compress Off
+                    </button>
+                    <button onClick={deleteSelected} className="px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded transition-colors ml-2">
+                      Delete Selected
+                    </button>
+                  </div>
+                )}
               </div>
-              
+
               {selectedCount > 0 && (
-                <div className="flex items-center gap-2">
-                  <button onClick={watermarkSelected} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
-                    Add Watermark
-                  </button>
-                  <button onClick={clearWatermarksSelected} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
-                    Clear Watermarks
-                  </button>
-                  <button onClick={() => compressSelected(true)} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
-                    Compress On
-                  </button>
-                  <button onClick={() => compressSelected(false)} className="px-3 py-1.5 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-colors">
-                    Compress Off
-                  </button>
-                  <button onClick={deleteSelected} className="px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded transition-colors ml-2">
-                    Delete Selected
-                  </button>
+                <div className="flex flex-col gap-3 bg-white dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-sm">
+                  <div className="flex flex-wrap items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <Settings size={16} className="text-gray-400 dark:text-gray-500" />
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Selected Compression:</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="massMaxSize" className="text-gray-600 dark:text-gray-400">Max Size (px):</label>
+                      <input 
+                        id="massMaxSize"
+                        type="number" 
+                        value={massMaxSize} 
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMassMaxSize(val);
+                          updateSelectedSettings({ maxSize: val });
+                        }}
+                        className="w-20 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="massQuality" className="text-gray-600 dark:text-gray-400">WebP Quality:</label>
+                      <input 
+                        id="massQuality"
+                        type="range" 
+                        min="0.1" max="1" step="0.1" 
+                        value={massQuality} 
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMassQuality(val);
+                          updateSelectedSettings({ quality: val });
+                        }}
+                        className="w-24"
+                      />
+                      <span className="w-8 text-right text-gray-500">{Math.round(massQuality * 100)}%</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <Droplets size={16} className="text-indigo-500" />
+                      <span className="font-medium text-gray-700 dark:text-gray-300">Selected Watermarks:</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="massWmSize" className="text-gray-600 dark:text-gray-400">Size:</label>
+                      <input 
+                        id="massWmSize"
+                        type="range" 
+                        min="0.05" max="1" step="0.05" 
+                        value={massWmScale} 
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMassWmScale(val);
+                          updateSelectedWatermarks({ scale: val });
+                        }}
+                        className="w-24"
+                      />
+                      <span className="w-8 text-right text-gray-500">{Math.round(massWmScale * 100)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label htmlFor="massWmOpacity" className="text-gray-600 dark:text-gray-400">Opacity:</label>
+                      <input 
+                        id="massWmOpacity"
+                        type="range" 
+                        min="0.1" max="1" step="0.1" 
+                        value={massWmOpacity} 
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setMassWmOpacity(val);
+                          updateSelectedWatermarks({ opacity: val });
+                        }}
+                        className="w-24"
+                      />
+                      <span className="w-8 text-right text-gray-500">{Math.round(massWmOpacity * 100)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer text-gray-600 dark:text-gray-400">
+                        <input 
+                          type="checkbox" 
+                          checked={massWmNegative}
+                          onChange={(e) => {
+                            const val = e.target.checked;
+                            setMassWmNegative(val);
+                            updateSelectedWatermarks({ negative: val });
+                          }}
+                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        Negative (Invert)
+                      </label>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -547,21 +725,30 @@ export default function App() {
                 key={item.id} 
                 item={item} 
                 watermarkUrl={watermark}
-                watermarkScale={watermarkScale}
-                watermarkOpacity={watermarkOpacity}
-                watermarkNegative={watermarkNegative}
+                globalMaxSize={maxSize}
+                globalQuality={quality}
                 onToggleSelect={() => toggleSelect(item.id)}
                 onAddWatermark={() => addWatermark(item.id)}
                 onSetWatermarkPosition={(x, y) => setWatermarkPosition(item.id, x, y)}
                 onUpdateWatermarkSettings={(settings) => updateWatermarkSettings(item.id, settings)}
+                onUpdateSettings={(settings) => updateImageSettings(item.id, settings)}
                 onToggleCompress={() => toggleCompress(item.id)}
                 onDelete={() => deleteImage(item.id)}
                 onDownload={() => downloadSingleImage(item)}
+                onPreview={() => setPreviewImage(item)}
               />
             ))}
           </div>
         )}
       </main>
+
+      {previewImage && (
+        <PreviewModal 
+          item={previewImage} 
+          processFn={processSingleImage} 
+          onClose={() => setPreviewImage(null)} 
+        />
+      )}
     </div>
   );
 }
