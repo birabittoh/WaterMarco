@@ -46,30 +46,32 @@ export const ImageCard: React.FC<Props> = ({
   return (
     <div className={`relative group border rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-sm transition-all ${item.selected ? 'ring-2 ring-indigo-500 border-indigo-500' : 'border-gray-200 dark:border-gray-700'}`}>
       <div className="aspect-square relative bg-gray-100 dark:bg-gray-900 flex items-center justify-center overflow-hidden">
-        <img 
-          src={item.dataUrl} 
-          alt={item.name} 
-          className={`max-w-full max-h-full object-contain ${watermarkUrl ? 'cursor-crosshair' : ''}`}
-          onClick={handleImageClick}
-          draggable={false}
-        />
-        
-        {/* Render watermark preview */}
-        {watermarkUrl && item.watermarkPosition && (
+        <div className={`relative flex items-center justify-center transition-all ${item.selected ? 'scale-95' : ''}`} style={{ maxWidth: '100%', maxHeight: '100%' }}>
           <img 
-            src={watermarkUrl} 
-            alt="watermark" 
-            className="absolute pointer-events-none"
-            style={{
-              left: `${item.watermarkPosition.x * 100}%`,
-              top: `${item.watermarkPosition.y * 100}%`,
-              width: `${(item.watermarkPosition.scale ?? 0.2) * 100}%`,
-              opacity: item.watermarkPosition.opacity ?? 0.5,
-              filter: item.watermarkPosition.negative ? 'invert(100%)' : 'none',
-              transform: 'translate(-50%, -50%)'
-            }}
+            src={item.dataUrl} 
+            alt={item.name} 
+            className={`max-w-full max-h-full object-contain ${watermarkUrl ? 'cursor-crosshair' : ''} ${item.selected ? 'rounded-lg' : ''}`}
+            onClick={handleImageClick}
+            draggable={false}
           />
-        )}
+          
+          {/* Render watermark preview */}
+          {watermarkUrl && item.watermarkPosition && (
+            <img 
+              src={watermarkUrl} 
+              alt="watermark" 
+              className="absolute pointer-events-none"
+              style={{
+                left: `${item.watermarkPosition.x * 100}%`,
+                top: `${item.watermarkPosition.y * 100}%`,
+                width: `${(item.watermarkPosition.scale ?? 0.2) * 100}%`,
+                opacity: item.watermarkPosition.opacity ?? 0.5,
+                filter: item.watermarkPosition.negative ? 'invert(100%)' : 'none',
+                transform: 'translate(-50%, -50%)'
+              }}
+            />
+          )}
+        </div>
 
         {/* Top right corner button for download */}
         <button 

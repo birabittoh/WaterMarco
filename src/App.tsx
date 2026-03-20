@@ -322,7 +322,7 @@ export default function App() {
           const wmImg = new Image();
           wmImg.onload = () => {
             const wm = item.watermarkPosition!;
-            const wmSize = Math.max(width, height) * (wm.scale ?? 0.2);
+            const wmSize = width * (wm.scale ?? 0.2);
             const wmRatio = wmImg.height / wmImg.width;
             const wmWidth = wmSize;
             const wmHeight = wmSize * wmRatio;
